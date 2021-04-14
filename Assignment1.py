@@ -155,14 +155,6 @@ def reproduce_xgboost(x, y):
     return best_model_xgboost, evaluation_xg
 
 
-def reproduce_LR_RF_XGBoost(x, y):
-    best_model_logistic, evaluation_LR = reproduce_LR(x, y)
-    best_model_rf, evaluation_rf = reproduce_RF(x, y)
-    best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
-    print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg])}')
-    return best_model_logistic, evaluation_LR, best_model_rf, evaluation_rf, best_model_xgboost, evaluation_xg
-
-
 def add_features(x):
     new_x = x
     new_x['Hematocrit_RedBloodCells'] = np.asarray(new_x['Hematocrit'] / new_x['Red blood Cells'])
@@ -226,15 +218,19 @@ if __name__ == '__main__':
     print(f'The data set is\n{x}')
 
     print('----------- Question 2 ----------- ')
-    best_model_logistic, evaluation_LR, best_model_rf, evaluation_rf, best_model_xgboost, evaluation_xg = reproduce_LR_RF_XGBoost(x, y)
+    best_model_logistic, evaluation_LR = reproduce_LR(x, y)
+    best_model_rf, evaluation_rf = reproduce_RF(x, y)
+    best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
     print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg])}')
 
     print('----------- Question 3 ----------- ')
     x = add_features(x)
     print(f'The new data set is\n{x}')
-    best_model_logistic, evaluation_LR, best_model_rf, evaluation_rf, best_model_xgboost, evaluation_xg = reproduce_LR_RF_XGBoost(x,y)
+    best_model_logistic, evaluation_LR = reproduce_LR(x, y)
+    best_model_rf, evaluation_rf = reproduce_RF(x, y)
+    best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
     print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg])}')
-
+    
     print('----------- Question 4 ----------- ')
     best_model_lgbm, evaluation_lgbm = evaluate_LGBM(x, y)
     best_model_cat, evaluation_cat = evaluate_CatBoost(x, y)
