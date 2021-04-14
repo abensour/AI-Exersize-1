@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.model_selection import KFold, train_test_split, GridSearchCV
 from sklearn.linear_model import LogisticRegression
@@ -9,7 +10,7 @@ import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from lightgbm import LGBMClassifier
 import shap
-from catboost import CatBoostClassifier
+#from catboost import CatBoostClassifier
 
 NUM_ITERATIONS = 10
 K = 5
@@ -106,8 +107,14 @@ def evaluate_model(x, y, model):
         predicted = model.predict(x_test.values)
         accuracy, f1, sensitivity, specificity, auroc = evaluate_model_using_confusion_matrix(y_test, predicted)
         metrics.append([accuracy, f1, sensitivity, specificity, auroc])
-    metrics = np.matrix(metrics)
-    return pd.DataFrame(data=metrics.mean(0), columns=['Accuracy', 'F1-Score', 'Sensitivity', 'Specificity', 'AUROC'])
+    metrics_table = []
+    metrics = np.array(metrics)
+    means = np.mean(metrics, axis=0)
+    std = np.std(metrics, axis=0)
+    metrics_names = ['Accuracy', 'F1-Score', 'Sensitivity', 'Specificity', 'AUROC']
+    for i in range(len(metrics_names)):
+        metrics_table.append(str(round(means[i], 4)) + ' +- ' + str(round(std[i], 4)))
+    return pd.DataFrame(data=np.matrix(metrics_table), columns=metrics_names)
 
 
 def reproduce_LR(x, y):
@@ -120,7 +127,7 @@ def reproduce_LR(x, y):
     return best_model_logistic, evaluation_LR
 
 
-def reproduct_RF(x, y):
+def reproduce_RF(x, y):
     # Random Forest
     model = RandomForestClassifier(random_state=1)
     # define search space
@@ -148,9 +155,10 @@ def reproduce_xgboost(x, y):
 
 def reproduce_LR_RF_XGBoost(x, y):
     best_model_logistic, evaluation_LR = reproduce_LR(x, y)
-    best_model_rf, evaluation_rf = reproduct_RF(x, y)
+    best_model_rf, evaluation_rf = reproduce_RF(x, y)
     best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
     print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg])}')
+    return best_model_logistic, evaluation_LR, best_model_rf, evaluation_rf, best_model_xgboost, evaluation_xg
 
 
 def add_features(x):
@@ -185,7 +193,8 @@ def evaluate_CatBoost(x, y):
     evaluation_cat.index = ['CAT']
     return best_model_cat, evaluation_cat
 
-def explain_using_shap(x,y, best_model_xgboost, best_model_cat, best_model_lgbm):
+
+def explain_using_shap(x, y, best_model_xgboost, best_model_cat, best_model_lgbm):
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
 
     explainer = shap.Explainer(best_model_xgboost)
@@ -215,23 +224,19 @@ if __name__ == '__main__':
     print(f'The data set is\n{x}')
 
     print('----------- Question 2 ----------- ')
-    best_model_logistic, evaluation_LR = reproduce_LR(x, y)
-    best_model_rf, evaluation_rf = reproduct_RF(x, y)
-    best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
-    print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg])}')
+    best_model_logistic, evaluation_LR, best_model_rf, evaluation_rf, best_model_xgboost, evaluation_xg = reproduce_LR_RF_XGBoost(x, y)
+
     print('----------- Question 3 ----------- ')
     x = add_features(x)
     print(f'The new data set is\n{x}')
-    best_model_logistic, evaluation_LR = reproduce_LR(x, y)
-    best_model_rf, evaluation_rf = reproduct_RF(x, y)
-    best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
-    print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg])}')
+    best_model_logistic, evaluation_LR, best_model_rf, evaluation_rf, best_model_xgboost, evaluation_xg = reproduce_LR_RF_XGBoost(x,y)
+
+
     print('----------- Question 4 ----------- ')
     best_model_lgbm, evaluation_lgbm = evaluate_LGBM(x, y)
     best_model_cat, evaluation_cat = evaluate_CatBoost(x, y)
     print(f'Evaluation:\n{pd.concat([evaluation_lgbm, evaluation_cat, evaluation_xg])}')
+
     print('----------- Question 6 ----------- ')
     explain_using_shap(x, y, best_model_xgboost, best_model_cat, best_model_lgbm)
-
-
-
+    
