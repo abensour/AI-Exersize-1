@@ -6,12 +6,16 @@ from sklearn.model_selection import KFold, train_test_split, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix, roc_auc_score
+from sklearn.model_selection import cross_val_score
 import xgboost as xgb
 from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline, make_pipeline
 from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
 import shap
-#from catboost import CatBoostClassifier
+
 import warnings
+
 warnings.filterwarnings('ignore')
 
 NUM_ITERATIONS = 10
@@ -58,13 +62,13 @@ def oversample(x, y):
 def nested_cross_validation(x, y, model, space):
     total_best_model = None
     total_best_score = 0
-    cv_outer = KFold(n_splits=K, shuffle=True, random_state=1)
+    cv_outer = KFold(n_splits=5, shuffle=True, random_state=1)
     for train_validation_ix, test_ix in cv_outer.split(x):
         # split data
         x_train_validation, x_test = x.iloc[train_validation_ix, :], x.iloc[test_ix, :]
         y_train_validation, y_test = y[train_validation_ix], y[test_ix]
         x_train_validation, y_train_validation = oversample(x_train_validation, y_train_validation)
-        cv_inner = KFold(n_splits=K, shuffle=True, random_state=1)
+        cv_inner = KFold(n_splits=5, shuffle=True, random_state=1)
         search = GridSearchCV(model, space, scoring='f1', cv=cv_inner, refit=True)
         result = search.fit(x_train_validation, y_train_validation)
         # get the best performing model fit on the whole training set
@@ -124,6 +128,7 @@ def reproduce_LR(x, y):
     model = LogisticRegression()
     space = dict()
     best_model_logistic = nested_cross_validation(x, y, model, space)
+    print(best_model_logistic)
     evaluation_LR = evaluate_model(x, y, best_model_logistic)
     evaluation_LR.index = ['LR']
     return best_model_logistic, evaluation_LR
@@ -132,11 +137,11 @@ def reproduce_LR(x, y):
 def reproduce_RF(x, y):
     # Random Forest
     model = RandomForestClassifier(random_state=1)
-    # define search space
     space = dict()
     space['n_estimators'] = range(10, 105, 5)
     space['max_depth'] = [2, 4, 8, 16, 32, 64]
     best_model_rf = nested_cross_validation(x, y, model, space)
+    print(best_model_rf)
     evaluation_rf = evaluate_model(x, y, best_model_rf)
     evaluation_rf.index = ['RF']
     return best_model_rf, evaluation_rf
@@ -150,6 +155,7 @@ def reproduce_xgboost(x, y):
     space['max_depth'] = [2, 4, 8, 16, 32, 64]
     space['learning_rate'] = [0.1, 0.05, 0.01]
     best_model_xgboost = nested_cross_validation(x, y, model, space)
+    print(best_model_xgboost)
     evaluation_xg = evaluate_model(x, y, best_model_xgboost)
     evaluation_xg.index = ['XGBoost']
     return best_model_xgboost, evaluation_xg
@@ -173,6 +179,7 @@ def evaluate_LGBM(x, y):
     space['max_depth'] = [2, 4, 8, 16, 32, 64]
     space['learning_rate'] = [0.1, 0.05, 0.01]
     best_model_lgbm = nested_cross_validation(x, y, model, space)
+    print(best_model_lgbm)
     evaluation_lgbm = evaluate_model(x, y, best_model_lgbm)
     evaluation_lgbm.index = ['LGBM']
     return best_model_lgbm, evaluation_lgbm
@@ -180,31 +187,38 @@ def evaluate_LGBM(x, y):
 
 def evaluate_CatBoost(x, y):
     # Cat Boost
-    model = CatBoostClassifier()
+    model = CatBoostClassifier(silent=True)
     space = dict()
     best_model_cat = nested_cross_validation(x, y, model, space)
+    print(best_model_cat)
     evaluation_cat = evaluate_model(x, y, best_model_cat)
     evaluation_cat.index = ['CAT']
     return best_model_cat, evaluation_cat
 
 
-def explain_using_shap(x, y, best_model_xgboost, best_model_cat, best_model_lgbm):
+def explain_using_shap(x, y, best_model_rf, best_model_xgboost, best_model_cat, best_model_lgbm):
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
+    # random forest
+    explainer = shap.Explainer(best_model_rf)
+    shap_values = explainer(x_train)
+    shap_values.values = shap_values.values[:, :, 1]
+    shap_values.base_values = shap_values.base_values[:, 1]
+    shap.plots.beeswarm(shap_values)
 
+    # xgboost
     explainer = shap.Explainer(best_model_xgboost)
     shap_values = explainer(x_train)
     shap.plots.beeswarm(shap_values)
 
+    # catboost
     explainer = shap.Explainer(best_model_cat)
     shap_values = explainer(x_train)
     shap.plots.beeswarm(shap_values)
 
-    # explain the model's predictions using SHAP
     explainer = shap.Explainer(best_model_lgbm)
     shap_values = explainer(x_train)
 
-    # visualize the first prediction's explanation
-    # shap.plots.waterfall(shap_values[0])
+    # lgbm
     shap_values.values = shap_values.values[:, :, 1]
     shap_values.base_values = shap_values.base_values[:, 1]
     shap.plots.beeswarm(shap_values)
@@ -221,7 +235,7 @@ if __name__ == '__main__':
     best_model_logistic, evaluation_LR = reproduce_LR(x, y)
     best_model_rf, evaluation_rf = reproduce_RF(x, y)
     best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
-    print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg])}')
+    print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg]).to_string()}')
 
     print('----------- Question 3 ----------- ')
     x = add_features(x)
@@ -229,12 +243,12 @@ if __name__ == '__main__':
     best_model_logistic, evaluation_LR = reproduce_LR(x, y)
     best_model_rf, evaluation_rf = reproduce_RF(x, y)
     best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
-    print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg])}')
-    
+    print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg]).to_string()}')
+
     print('----------- Question 4 ----------- ')
     best_model_lgbm, evaluation_lgbm = evaluate_LGBM(x, y)
     best_model_cat, evaluation_cat = evaluate_CatBoost(x, y)
-    print(f'Evaluation:\n{pd.concat([evaluation_lgbm, evaluation_cat, evaluation_xg])}')
+    print(f'Evaluation:\n{pd.concat([evaluation_lgbm, evaluation_cat, evaluation_xg]).to_string()}')
 
     print('----------- Question 6 ----------- ')
-    explain_using_shap(x, y, best_model_xgboost, best_model_cat, best_model_lgbm)
+    explain_using_shap(x, y, best_model_rf, best_model_xgboost, best_model_cat, best_model_lgbm)
