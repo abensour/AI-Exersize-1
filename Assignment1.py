@@ -149,7 +149,7 @@ def reproduce_RF(x, y):
 
 def reproduce_xgboost(x, y):
     # XGBoost
-    model = xgb.XGBClassifier(n_jobs=1)
+    model = xgb.XGBClassifier(n_jobs=1, eval_metric='logloss')
     space = dict()
     space['n_estimators'] = range(10, 105, 5)
     space['max_depth'] = [2, 4, 8, 16, 32, 64]
