@@ -167,7 +167,7 @@ def reproduce_xgboost(x, y):
 
 
 def add_features(x):
-    new_x = x
+    new_x = x.copy()
     new_x['Hematocrit_RedBloodCells'] = np.asarray(new_x['Hematocrit'] / new_x['Red blood Cells'])
     new_x['Hemoglobin_RedBloodCells'] = np.asarray(new_x['Hemoglobin'] / new_x['Red blood Cells'])
     new_x['Leukocytes_Hematocrit'] = np.asarray(new_x['Leukocytes'] / new_x['Hematocrit'])
