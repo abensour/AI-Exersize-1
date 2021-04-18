@@ -13,6 +13,7 @@ from imblearn.pipeline import Pipeline, make_pipeline
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 import shap
+from datetime import datetime
 
 import warnings
 
@@ -63,6 +64,7 @@ def nested_cross_validation(x, y, model, space):
     total_best_model = None
     total_best_score = 0
     cv_outer = KFold(n_splits=5, shuffle=True, random_state=1)
+    outer_results = list()
     for train_validation_ix, test_ix in cv_outer.split(x):
         # split data
         x_train_validation, x_test = x.iloc[train_validation_ix, :], x.iloc[test_ix, :]
@@ -137,6 +139,7 @@ def reproduce_LR(x, y):
 def reproduce_RF(x, y):
     # Random Forest
     model = RandomForestClassifier(random_state=1)
+    # define search space
     space = dict()
     space['n_estimators'] = range(10, 105, 5)
     space['max_depth'] = [2, 4, 8, 16, 32, 64]
@@ -149,14 +152,16 @@ def reproduce_RF(x, y):
 
 def reproduce_xgboost(x, y):
     # XGBoost
-    model = xgb.XGBClassifier(n_jobs=1, eval_metric='logloss')
+    model = xgb.XGBClassifier(n_jobs=1)
     space = dict()
-    space['n_estimators'] = range(10, 105, 5)
-    space['max_depth'] = [2, 4, 8, 16, 32, 64]
-    space['learning_rate'] = [0.1, 0.05, 0.01]
+    space['n_estimators'] = range(90, 105, 5)
+    space['max_depth'] = [16]
+    space['learning_rate'] = [0.1, 0.01]
     best_model_xgboost = nested_cross_validation(x, y, model, space)
     print(best_model_xgboost)
+    start = datetime.now()
     evaluation_xg = evaluate_model(x, y, best_model_xgboost)
+    print('Running Time: ', datetime.now() - start)
     evaluation_xg.index = ['XGBoost']
     return best_model_xgboost, evaluation_xg
 
@@ -180,7 +185,9 @@ def evaluate_LGBM(x, y):
     space['learning_rate'] = [0.1, 0.05, 0.01]
     best_model_lgbm = nested_cross_validation(x, y, model, space)
     print(best_model_lgbm)
+    start = datetime.now()
     evaluation_lgbm = evaluate_model(x, y, best_model_lgbm)
+    print('Runinng Time: ', datetime.now() - start)
     evaluation_lgbm.index = ['LGBM']
     return best_model_lgbm, evaluation_lgbm
 
@@ -191,40 +198,42 @@ def evaluate_CatBoost(x, y):
     space = dict()
     best_model_cat = nested_cross_validation(x, y, model, space)
     print(best_model_cat)
+    start = datetime.now()
     evaluation_cat = evaluate_model(x, y, best_model_cat)
+    print('Runinng Time: ', datetime.now() - start)
     evaluation_cat.index = ['CAT']
     return best_model_cat, evaluation_cat
 
 
 def explain_using_shap(x, y, best_model_rf, best_model_xgboost, best_model_cat, best_model_lgbm):
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
-    # random forest
+
+    #RF
     explainer = shap.Explainer(best_model_rf)
     shap_values = explainer(x_train)
     shap_values.values = shap_values.values[:, :, 1]
     shap_values.base_values = shap_values.base_values[:, 1]
     shap.plots.beeswarm(shap_values)
 
-    # xgboost
+    #XGBoost
     explainer = shap.Explainer(best_model_xgboost)
     shap_values = explainer(x_train)
     shap.plots.beeswarm(shap_values)
 
-    # catboost
+    #CatBoost
     explainer = shap.Explainer(best_model_cat)
     shap_values = explainer(x_train)
     shap.plots.beeswarm(shap_values)
 
+    #LightGBM
     explainer = shap.Explainer(best_model_lgbm)
     shap_values = explainer(x_train)
-
-    # lgbm
     shap_values.values = shap_values.values[:, :, 1]
     shap_values.base_values = shap_values.base_values[:, 1]
     shap.plots.beeswarm(shap_values)
 
 
-if __name__ == '__main__':
+if __name__=='__main__':
     # create data set
     dataset, target = preprocessing()
     x = dataset
@@ -238,11 +247,11 @@ if __name__ == '__main__':
     print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg]).to_string()}')
 
     print('----------- Question 3 ----------- ')
-    x = add_features(x)
-    print(f'The new data set is\n{x}')
-    best_model_logistic, evaluation_LR = reproduce_LR(x, y)
-    best_model_rf, evaluation_rf = reproduce_RF(x, y)
-    best_model_xgboost, evaluation_xg = reproduce_xgboost(x, y)
+    new_x = add_features(x)
+    print(f'The new data set is\n{new_x}')
+    best_model_logistic, evaluation_LR = reproduce_LR(new_x, y)
+    best_model_rf, evaluation_rf = reproduce_RF(new_x, y)
+    best_model_xgboost, evaluation_xg = reproduce_xgboost(new_x, y)
     print(f'Evaluation:\n{pd.concat([evaluation_LR, evaluation_rf, evaluation_xg]).to_string()}')
 
     print('----------- Question 4 ----------- ')
